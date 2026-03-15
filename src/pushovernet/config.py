@@ -88,3 +88,26 @@ class ServerConfig:
             host=host or section.get("host", "0.0.0.0"),
             port=int(port) if port else section.get("port", 9505),
         )
+
+
+@dataclass
+class ProxyConfig:
+    url: str = "http://localhost:9505"
+    api_key: str = ""
+
+    @classmethod
+    def load(cls, path: Path | str | None = None) -> "ProxyConfig":
+        url = os.environ.get("PUSHOVERNET_PROXY_URL")
+        api_key = os.environ.get("PUSHOVERNET_PROXY_API_KEY")
+
+        path = Path(path) if path else DEFAULT_CONFIG_PATH
+        section: dict = {}
+        if path.exists():
+            with open(path, "rb") as f:
+                data = tomllib.load(f)
+            section = data.get("proxy", {})
+
+        return cls(
+            url=url or section.get("url", "http://localhost:9505"),
+            api_key=api_key or section.get("api_key", ""),
+        )

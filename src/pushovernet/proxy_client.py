@@ -1,7 +1,9 @@
+from pathlib import Path
 from typing import Any
 
 import httpx
 
+from pushovernet.config import ProxyConfig
 from pushovernet.exceptions import PushoverHTTPError
 from pushovernet.models import MessageResponse, RateLimits
 
@@ -11,13 +13,19 @@ class ProxyClient:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:9505",
+        base_url: str | None = None,
         api_key: str | None = None,
+        config_path: Path | str | None = None,
     ):
+        if base_url is None and api_key is None:
+            config = ProxyConfig.load(config_path)
+            base_url = config.url
+            api_key = api_key or config.api_key or None
+
         headers = {}
         if api_key:
             headers["X-API-Key"] = api_key
-        self._client = httpx.Client(base_url=base_url, headers=headers)
+        self._client = httpx.Client(base_url=base_url or "http://localhost:9505", headers=headers)
 
     def __enter__(self):
         return self
