@@ -62,3 +62,29 @@ class PushoverConfig:
                 "PUSHOVER_TOKEN and PUSHOVER_USER_KEY environment variables are required"
             )
         return cls(token=token, user_key=user_key)
+
+
+@dataclass
+class ServerConfig:
+    api_key: str = ""
+    host: str = "0.0.0.0"
+    port: int = 9505
+
+    @classmethod
+    def load(cls, path: Path | str | None = None) -> "ServerConfig":
+        host = os.environ.get("PUSHOVERNET_HOST")
+        port = os.environ.get("PUSHOVERNET_PORT")
+        api_key = os.environ.get("PUSHOVERNET_API_KEY")
+
+        path = Path(path) if path else DEFAULT_CONFIG_PATH
+        section: dict = {}
+        if path.exists():
+            with open(path, "rb") as f:
+                data = tomllib.load(f)
+            section = data.get("server", {})
+
+        return cls(
+            api_key=api_key or section.get("api_key", ""),
+            host=host or section.get("host", "0.0.0.0"),
+            port=int(port) if port else section.get("port", 9505),
+        )
