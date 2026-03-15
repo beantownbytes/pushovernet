@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import TracebackType
 from typing import Any
 
 import httpx
@@ -24,6 +25,9 @@ from pushovernet.models import (
 
 BASE_URL = "https://api.pushover.net"
 
+JSONDict = dict[str, Any]  # type alias for parsed JSON from response.json()
+FormData = dict[str, str | int | bool]
+
 
 class PushoverClient:
     def __init__(
@@ -33,7 +37,7 @@ class PushoverClient:
         user_key: str | None = None,
         config: PushoverConfig | None = None,
         config_path: Path | str | None = None,
-    ):
+    ) -> None:
         if token and user_key:
             self._token = token
             self._user_key = user_key
@@ -50,13 +54,18 @@ class PushoverClient:
         self._client = httpx.Client(base_url=BASE_URL)
         self.rate_limits: RateLimits | None = None
 
-    def __enter__(self):
+    def __enter__(self) -> "PushoverClient":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self.close()
 
-    def close(self):
+    def close(self) -> None:
         self._client.close()
 
     def _update_rate_limits(self, response: httpx.Response) -> None:
@@ -70,11 +79,11 @@ class PushoverClient:
                 reset=int(reset),
             )
 
-    def _handle_response(self, response: httpx.Response) -> dict:
+    def _handle_response(self, response: httpx.Response) -> JSONDict:
         self._update_rate_limits(response)
 
         if response.status_code == 429:
-            body = response.json()
+            body: JSONDict = response.json()
             reset_at = int(response.headers.get("X-Limit-App-Reset", 0))
             raise PushoverRateLimitError(
                 status=body.get("status", 0),
@@ -105,19 +114,19 @@ class PushoverClient:
             )
         return body
 
-    def _post(self, path: str, data: dict[str, Any], **kwargs) -> dict:
+    def _post(self, path: str, data: FormData, **kwargs: str) -> JSONDict:
         data["token"] = self._token
-        response = self._client.post(path, data=data, **kwargs)
+        response = self._client.post(path, data=data, **kwargs)  # type: ignore[arg-type]
         return self._handle_response(response)
 
     def _post_multipart(
-        self, path: str, data: dict[str, Any], files: dict[str, Any]
-    ) -> dict:
+        self, path: str, data: FormData, files: dict[str, tuple[str, bytes, str]]
+    ) -> JSONDict:
         data["token"] = self._token
         response = self._client.post(path, data=data, files=files)
         return self._handle_response(response)
 
-    def _get(self, path: str, params: dict[str, Any] | None = None) -> dict:
+    def _get(self, path: str, params: FormData | None = None) -> JSONDict:
         params = params or {}
         params["token"] = self._token
         response = self._client.get(path, params=params)
@@ -154,7 +163,7 @@ class PushoverClient:
             if expire is None or expire > 10800:
                 raise ValueError("Emergency priority requires expire <= 10800 seconds")
 
-        data: dict[str, Any] = {
+        data: FormData = {
             "user": user or self._user_key,
             "message": message,
         }
@@ -170,22 +179,28 @@ class PushoverClient:
         if resolved_sound:
             data["sound"] = resolved_sound
 
-        for key, val in [
-            ("title", title),
-            ("timestamp", timestamp),
-            ("ttl", ttl),
-            ("url", url),
-            ("url_title", url_title),
-            ("retry", retry),
-            ("expire", expire),
-            ("callback", callback),
-            ("tags", tags),
-            ("attachment_base64", attachment_base64),
-            ("attachment_type", attachment_type),
-        ]:
-            if val is not None:
-                data[key] = val
-
+        if title is not None:
+            data["title"] = title
+        if timestamp is not None:
+            data["timestamp"] = timestamp
+        if ttl is not None:
+            data["ttl"] = ttl
+        if url is not None:
+            data["url"] = url
+        if url_title is not None:
+            data["url_title"] = url_title
+        if retry is not None:
+            data["retry"] = retry
+        if expire is not None:
+            data["expire"] = expire
+        if callback is not None:
+            data["callback"] = callback
+        if tags is not None:
+            data["tags"] = tags
+        if attachment_base64 is not None:
+            data["attachment_base64"] = attachment_base64
+        if attachment_type is not None:
+            data["attachment_type"] = attachment_type
         if html:
             data["html"] = 1
         if monospace:
@@ -197,7 +212,7 @@ class PushoverClient:
                 body = self._post_multipart(
                     "/1/messages.json",
                     data,
-                    files={"attachment": (attachment.name, f, attachment_type or "application/octet-stream")},
+                    files={"attachment": (attachment.name, f.read(), attachment_type or "application/octet-stream")},
                 )
         elif isinstance(attachment, bytes):
             body = self._post_multipart(
@@ -217,7 +232,7 @@ class PushoverClient:
     def validate_user(
         self, user: str | None = None, device: str | None = None
     ) -> ValidateResponse:
-        data: dict[str, Any] = {"user": user or self._user_key}
+        data: FormData = {"user": user or self._user_key}
         if device:
             data["device"] = device
         body = self._post("/1/users/validate.json", data)
@@ -243,22 +258,26 @@ class PushoverClient:
             called_back_at=body.get("called_back_at", 0),
         )
 
-    def cancel_receipt(self, receipt: str) -> dict:
+    def cancel_receipt(self, receipt: str) -> JSONDict:
         return self._post(f"/1/receipts/{receipt}/cancel.json", {})
 
-    def cancel_receipt_by_tag(self, tag: str) -> dict:
+    def cancel_receipt_by_tag(self, tag: str) -> JSONDict:
         return self._post(f"/1/receipts/cancel_by_tag/{tag}.json", {})
 
     def list_sounds(self) -> dict[str, str]:
         body = self._get("/1/sounds.json")
-        return body.get("sounds", {})
+        sounds: dict[str, str] = body.get("sounds", {})
+        return sounds
 
     def get_limits(self) -> RateLimits:
         body = self._get("/1/apps/limits.json")
+        limit = body.get("app_limit") or body.get("limit") or 0
+        remaining = body.get("app_remaining") or body.get("remaining") or 0
+        reset = body.get("app_reset") or body.get("reset") or 0
         return RateLimits(
-            limit=body.get("app_limit", body.get("limit")),
-            remaining=body.get("app_remaining", body.get("remaining")),
-            reset=body.get("app_reset", body.get("reset")),
+            limit=int(limit),
+            remaining=int(remaining),
+            reset=int(reset),
         )
 
     def create_group(self, name: str) -> GroupCreated:
@@ -291,8 +310,8 @@ class PushoverClient:
 
     def add_user_to_group(
         self, group_key: str, user: str, *, device: str | None = None, memo: str | None = None
-    ) -> dict:
-        data: dict[str, Any] = {"user": user}
+    ) -> JSONDict:
+        data: FormData = {"user": user}
         if device:
             data["device"] = device
         if memo:
@@ -301,29 +320,29 @@ class PushoverClient:
 
     def remove_user_from_group(
         self, group_key: str, user: str, *, device: str | None = None
-    ) -> dict:
-        data: dict[str, Any] = {"user": user}
+    ) -> JSONDict:
+        data: FormData = {"user": user}
         if device:
             data["device"] = device
         return self._post(f"/1/groups/{group_key}/remove_user.json", data)
 
     def disable_user_in_group(
         self, group_key: str, user: str, *, device: str | None = None
-    ) -> dict:
-        data: dict[str, Any] = {"user": user}
+    ) -> JSONDict:
+        data: FormData = {"user": user}
         if device:
             data["device"] = device
         return self._post(f"/1/groups/{group_key}/disable_user.json", data)
 
     def enable_user_in_group(
         self, group_key: str, user: str, *, device: str | None = None
-    ) -> dict:
-        data: dict[str, Any] = {"user": user}
+    ) -> JSONDict:
+        data: FormData = {"user": user}
         if device:
             data["device"] = device
         return self._post(f"/1/groups/{group_key}/enable_user.json", data)
 
-    def rename_group(self, group_key: str, name: str) -> dict:
+    def rename_group(self, group_key: str, name: str) -> JSONDict:
         return self._post(f"/1/groups/{group_key}/rename.json", {"name": name})
 
     def send_glance(
@@ -336,21 +355,21 @@ class PushoverClient:
         subtext: str | None = None,
         count: int | None = None,
         percent: int | None = None,
-    ) -> dict:
-        fields = {
+    ) -> JSONDict:
+        glance_fields: dict[str, str | int | None] = {
             "title": title,
             "text": text,
             "subtext": subtext,
             "count": count,
             "percent": percent,
         }
-        if not any(v is not None for v in fields.values()):
+        if not any(v is not None for v in glance_fields.values()):
             raise ValueError("At least one glance data field must be provided")
 
-        data: dict[str, Any] = {"user": user or self._user_key}
+        data: FormData = {"user": user or self._user_key}
         if device:
             data["device"] = device
-        for key, val in fields.items():
+        for key, val in glance_fields.items():
             if val is not None:
                 data[key] = val
         return self._post("/1/glances.json", data)
@@ -363,7 +382,7 @@ class PushoverClient:
         device_name: str | None = None,
         sound: str | None = None,
     ) -> SubscriptionResponse:
-        data: dict[str, Any] = {"subscription": subscription, "user": user}
+        data: FormData = {"subscription": subscription, "user": user}
         if device_name:
             data["device_name"] = device_name
         if sound:
@@ -381,10 +400,10 @@ class PushoverClient:
         user: str | None = None,
         email: str | None = None,
         os: str | None = None,
-    ) -> dict:
+    ) -> JSONDict:
         if (user is None) == (email is None):
             raise ValueError("Exactly one of 'user' or 'email' must be provided")
-        data: dict[str, Any] = {}
+        data: FormData = {}
         if user:
             data["user"] = user
         if email:

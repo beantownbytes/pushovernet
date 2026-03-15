@@ -44,11 +44,11 @@ class PushoverConfig:
         secret = get_secret(secret_name, region)
         try:
             return cls(
-                token=secret["token"],
-                user_key=secret["user_key"],
-                default_device=secret.get("default_device", ""),
-                default_priority=secret.get("default_priority", 0),
-                default_sound=secret.get("default_sound", ""),
+                token=str(secret["token"]),
+                user_key=str(secret["user_key"]),
+                default_device=str(secret.get("default_device", "")),
+                default_priority=int(secret.get("default_priority", 0)),
+                default_sound=str(secret.get("default_sound", "")),
             )
         except KeyError as e:
             raise PushoverConfigError(f"Missing required secret key: {e}") from e
@@ -77,16 +77,16 @@ class ServerConfig:
         api_key = os.environ.get("PUSHOVERNET_API_KEY")
 
         path = Path(path) if path else DEFAULT_CONFIG_PATH
-        section: dict = {}
+        section: dict[str, str | int] = {}
         if path.exists():
             with open(path, "rb") as f:
                 data = tomllib.load(f)
             section = data.get("server", {})
 
         return cls(
-            api_key=api_key or section.get("api_key", ""),
-            host=host or section.get("host", "0.0.0.0"),
-            port=int(port) if port else section.get("port", 9505),
+            api_key=api_key or str(section.get("api_key", "")),
+            host=host or str(section.get("host", "0.0.0.0")),
+            port=int(port) if port else int(section.get("port", 9505)),
         )
 
 
@@ -101,13 +101,13 @@ class ProxyConfig:
         api_key = os.environ.get("PUSHOVERNET_PROXY_API_KEY")
 
         path = Path(path) if path else DEFAULT_CONFIG_PATH
-        section: dict = {}
+        section: dict[str, str | int] = {}
         if path.exists():
             with open(path, "rb") as f:
                 data = tomllib.load(f)
             section = data.get("proxy", {})
 
         return cls(
-            url=url or section.get("url", "http://localhost:9505"),
-            api_key=api_key or section.get("api_key", ""),
+            url=url or str(section.get("url", "http://localhost:9505")),
+            api_key=api_key or str(section.get("api_key", "")),
         )

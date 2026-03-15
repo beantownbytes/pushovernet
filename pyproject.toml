@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pushovernet"
-version = "0.1.3"
+version = "0.1.4"
 description = "Python client for the Pushover.net notification API"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,6 +23,7 @@ dev = [
     "pytest>=8.0",
     "pytest-httpx>=0.30",
     "ruff>=0.4",
+    "mypy>=1.10",
     "fastapi>=0.115",
     "uvicorn>=0.32",
 ]
@@ -32,6 +33,9 @@ pushovernet-server = "pushovernet.server:run"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pushovernet"]
+
+[tool.mypy]
+strict = true
 
 [tool.ruff]
 src = ["src"]
