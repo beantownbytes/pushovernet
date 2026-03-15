@@ -1,0 +1,8 @@
+services:
+  pushovernet:
+    build: .
+    ports:
+      - "9505:9505"
+    volumes:
+      - ./config.toml:/root/.config/pushovernet/config.toml:ro
+    restart: unless-stopped
