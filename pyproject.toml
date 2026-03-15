@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pushovernet"
+version = "0.1.0"
+description = "Python client for the Pushover.net notification API"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+aws = ["boto3>=1.34"]
+dev = [
+    "pytest>=8.0",
+    "pytest-httpx>=0.30",
+    "ruff>=0.4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pushovernet"]
+
+[tool.ruff]
+src = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
